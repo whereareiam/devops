@@ -1,0 +1,138 @@
+name: Publish Docs Site
+description: Build a Docusaurus docs site, package it as a Docker image, and push it to a registry
+
+inputs:
+  docs-directory:
+    description: Path to the Docusaurus project directory in the consumer repository
+    required: false
+    default: docs
+  registry:
+    description: Container registry hostname
+    required: true
+  registry-username:
+    description: Registry username
+    required: true
+  registry-token:
+    description: Registry token or password
+    required: true
+  image:
+    description: Full image name without tag
+    required: true
+  tags:
+    description: Newline-separated image tags to build and push
+    required: true
+  node-image:
+    description: Node image used to build the static docs site
+    required: false
+    default: node:22-alpine
+  dockerfile:
+    description: Dockerfile path relative to the repository root
+    required: false
+    default: docs/Dockerfile
+  docker-context:
+    description: Docker build context relative to the repository root
+    required: false
+    default: docs
+  content-directory:
+    description: Real docs content directory relative to docs-directory
+    required: false
+    default: content
+  sidebars-path:
+    description: Sidebars file path relative to docs-directory
+    required: false
+    default: sidebars.js
+  current-ref:
+    description: Git ref used as the current docs version
+    required: false
+    default: origin/dev
+  branch-refs:
+    description: Space-separated branch refs included as selectable docs versions
+    required: false
+    default: origin/release
+  tag-pattern:
+    description: Git tag pattern included as release docs versions
+    required: false
+    default: v*
+  max-releases:
+    description: Maximum number of matching release tags included
+    required: false
+    default: "10"
+  build-command:
+    description: Command that builds the static docs site, from inside docs-directory
+    required: false
+    default: npm run docs:build
+
+runs:
+  using: composite
+  steps:
+    - name: Build docs site
+      shell: bash
+      env:
+        DOCS_DIRECTORY: ${{ inputs.docs-directory }}
+        DOCS_CONTENT_DIRECTORY: ${{ inputs.content-directory }}
+        DOCS_SIDEBARS_PATH: ${{ inputs.sidebars-path }}
+        DOCS_CURRENT_REF: ${{ inputs.current-ref }}
+        DOCS_BRANCH_REFS: ${{ inputs.branch-refs }}
+        DOCS_TAG_PATTERN: ${{ inputs.tag-pattern }}
+        DOCS_MAX_RELEASES: ${{ inputs.max-releases }}
+        NODE_IMAGE: ${{ inputs.node-image }}
+        BUILD_COMMAND: ${{ inputs.build-command }}
+      run: |
+        uid="$(id -u)"
+        gid="$(id -g)"
+        prepare_script="$GITHUB_ACTION_PATH/prepare-versioned-docs.sh"
+
+        docker run --rm \
+          -v "$PWD:/workspace" \
+          -v "$prepare_script:/devops/prepare-versioned-docs.sh:ro" \
+          -w /workspace \
+          -e DOCS_REPOSITORY_DIRECTORY=/workspace \
+          -e DOCS_SITE_DIRECTORY="$DOCS_DIRECTORY" \
+          -e DOCS_CONTENT_DIRECTORY \
+          -e DOCS_SIDEBARS_PATH \
+          -e DOCS_CURRENT_REF \
+          -e DOCS_BRANCH_REFS \
+          -e DOCS_TAG_PATTERN \
+          -e DOCS_MAX_RELEASES \
+          "$NODE_IMAGE" \
+          sh -c "apk add --no-cache bash git && cd '$DOCS_DIRECTORY' && npm ci && bash /devops/prepare-versioned-docs.sh && $BUILD_COMMAND && rm -rf node_modules .docusaurus && chown -R $uid:$gid build versioned_docs versioned_sidebars versions.json"
+
+    - name: Login to registry
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        REGISTRY_TOKEN: ${{ inputs.registry-token }}
+      run: echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
+
+    - name: Build docs image
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        TAGS: ${{ inputs.tags }}
+        DOCKERFILE: ${{ inputs.dockerfile }}
+        DOCKER_CONTEXT: ${{ inputs.docker-context }}
+      run: |
+        build_args=()
+        while IFS= read -r tag; do
+          [ -n "$tag" ] || continue
+          build_args+=("-t" "$IMAGE:$tag")
+        done <<< "$TAGS"
+
+        if [ "${#build_args[@]}" -eq 0 ]; then
+          echo "No image tags were provided." >&2
+          exit 1
+        fi
+
+        docker build -f "$DOCKERFILE" "${build_args[@]}" "$DOCKER_CONTEXT"
+
+    - name: Push docs image
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        TAGS: ${{ inputs.tags }}
+      run: |
+        while IFS= read -r tag; do
+          [ -n "$tag" ] || continue
+          docker push "$IMAGE:$tag"
+        done <<< "$TAGS"
