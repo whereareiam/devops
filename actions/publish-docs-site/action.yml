@@ -24,7 +24,7 @@ inputs:
   node-image:
     description: Node image used to build the static docs site
     required: false
-    default: node:22-alpine
+    default: node:24-alpine
   dockerfile:
     description: Dockerfile path relative to the repository root
     required: false
@@ -95,7 +95,7 @@ runs:
           -e DOCS_TAG_PATTERN \
           -e DOCS_MAX_RELEASES \
           "$NODE_IMAGE" \
-          sh -c "apk add --no-cache bash git && cd '$DOCS_DIRECTORY' && npm ci && bash /devops/prepare-versioned-docs.sh && $BUILD_COMMAND && rm -rf node_modules .docusaurus && chown -R $uid:$gid build versioned_docs versioned_sidebars versions.json"
+          sh -c "apk add --no-cache bash git && git config --global --add safe.directory /workspace && cd '$DOCS_DIRECTORY' && npm ci && bash /devops/prepare-versioned-docs.sh && $BUILD_COMMAND && rm -rf node_modules .docusaurus && chown -R $uid:$gid build versioned_docs versioned_sidebars versions.json"
 
     - name: Login to registry
       shell: bash
