@@ -49,7 +49,7 @@ inputs:
   artifact-keeper-url:
     description: Artifact Keeper base URL; override for another installation
     required: false
-    default: https://maven.whereareiam.me
+    default: https://registry.whereareiam.me
   ci-provider-id:
     description: Artifact Keeper CI-OIDC provider UUID; override for another project
     required: false

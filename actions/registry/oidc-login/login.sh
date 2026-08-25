@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [ -z "${AK_PROVIDER_ID:-}" ] && [ "${GITHUB_SERVER_URL:-}" = "https://github.com" ] && [ "${GITHUB_REPOSITORY:-}" = "whereareiam/toolkit" ]; then
-  AK_URL="${AK_URL:-https://maven.whereareiam.me}"
+  AK_URL="${AK_URL:-https://registry.whereareiam.me}"
   AK_PROVIDER_ID="bb42817c-b0e2-4bea-ab22-d7b3db257f82"
   AK_AUDIENCE="${AK_AUDIENCE:-artifact-keeper-whereareiam-github}"
 fi
