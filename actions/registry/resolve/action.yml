@@ -1,0 +1,47 @@
+name: Resolve registry repository
+description: Resolve a private-by-default Artifact Keeper Docker repository path
+
+inputs:
+  registry:
+    description: Registry hostname
+    required: false
+    default: registry.whereareiam.me
+  visibility:
+    description: Repository visibility, either private or public
+    required: false
+    default: private
+  namespace:
+    description: Image namespace inside the Artifact Keeper repository
+    required: false
+    default: whereareiam
+  image:
+    description: Image name; defaults to the GitHub repository name
+    required: false
+    default: ""
+
+outputs:
+  repository:
+    description: Fully-qualified image repository without a tag
+    value: ${{ steps.resolve.outputs.repository }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        VISIBILITY: ${{ inputs.visibility }}
+        NAMESPACE: ${{ inputs.namespace }}
+        IMAGE: ${{ inputs.image }}
+      run: |
+        set -euo pipefail
+        case "${VISIBILITY,,}" in
+          private|public) ;;
+          *) echo "visibility must be private or public" >&2; exit 1 ;;
+        esac
+        image="${IMAGE:-${GITHUB_REPOSITORY##*/}}"
+        for value in "$REGISTRY" "$NAMESPACE" "$image"; do
+          [ -n "$value" ] || { echo "registry, namespace, and image are required" >&2; exit 1; }
+        done
+        echo "repository=${REGISTRY%/}/docker-${VISIBILITY,,}/${NAMESPACE#/}/${image#/}" >> "$GITHUB_OUTPUT"

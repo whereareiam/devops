@@ -1,0 +1,95 @@
+name: Publish Maven artifacts
+description: Publish Maven artifacts using Toolkit or another Gradle/Maven command
+
+inputs:
+  # Destination
+  maven-base-url:
+    description: Base URL containing Maven repository keys
+    required: false
+    default: https://maven.whereareiam.me/maven
+  visibility:
+    description: Repository visibility, either private or public
+    required: false
+    default: private
+  channel:
+    description: Maven channel; select release only for a release workflow
+    required: false
+    default: development
+  repository:
+    description: Optional exact Maven repository key override
+    required: false
+    default: ""
+  # Authentication (the Toolkit GitHub OIDC profile is used by default)
+  artifact-keeper-url:
+    description: Artifact Keeper base URL; override for another installation
+    required: false
+    default: https://maven.whereareiam.me
+  ci-provider-id:
+    description: Artifact Keeper CI-OIDC provider UUID; override for another project
+    required: false
+    default: bb42817c-b0e2-4bea-ab22-d7b3db257f82
+  oidc-audience:
+    description: CI OIDC audience; override for another issuer
+    required: false
+    default: artifact-keeper-whereareiam-github
+  registry-username:
+    description: Optional Maven repository username for a legacy or local runner
+    required: false
+    default: ""
+  registry-token:
+    description: Optional Maven repository token for a legacy or local runner
+    required: false
+    default: ""
+
+  # Execution
+  command:
+    description: Build command that performs publishing
+    required: false
+    default: ./gradlew --no-daemon publish
+  working-directory:
+    description: Directory in which to run the publishing command
+    required: false
+    default: .
+
+runs:
+  using: composite
+  steps:
+    - name: Validate Maven destination
+      shell: bash
+      env:
+        VISIBILITY: ${{ inputs.visibility }}
+        CHANNEL: ${{ inputs.channel }}
+      run: |
+        set -euo pipefail
+        case "${VISIBILITY,,}" in private|public) ;; *) echo "visibility must be private or public" >&2; exit 1 ;; esac
+        case "${CHANNEL,,}" in release|development) ;; *) echo "channel must be release or development" >&2; exit 1 ;; esac
+
+    - name: Publish Maven artifacts
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PUBLISH_MAVEN_BASE_URL: ${{ inputs.maven-base-url }}
+        PUBLISH_VISIBILITY: ${{ inputs.visibility }}
+        PUBLISH_CHANNEL: ${{ inputs.channel }}
+        PUBLISH_MAVEN_REPOSITORY: ${{ inputs.repository }}
+        PUBLISH_USER: ${{ inputs.registry-username }}
+        PUBLISH_TOKEN: ${{ inputs.registry-token }}
+        ARTIFACT_KEEPER_URL: ${{ inputs.artifact-keeper-url }}
+        CI_PROVIDER_ID: ${{ inputs.ci-provider-id }}
+        OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
+        PUBLISH_COMMAND: ${{ inputs.command }}
+      run: |
+        set -euo pipefail
+        if [ -z "$PUBLISH_USER" ] && [ -z "$PUBLISH_TOKEN" ]; then
+          export AK_URL="$ARTIFACT_KEEPER_URL"
+          export AK_PROVIDER_ID="$CI_PROVIDER_ID"
+          export AK_AUDIENCE="$OIDC_AUDIENCE"
+          source "$GITHUB_ACTION_PATH/../oidc-login/login.sh"
+          PUBLISH_USER="$ARTIFACT_KEEPER_USER"
+          PUBLISH_TOKEN="$ARTIFACT_KEEPER_TOKEN"
+        fi
+        [ -n "$PUBLISH_USER" ] || { echo "Maven login did not provide a username" >&2; exit 1; }
+        [ -n "$PUBLISH_TOKEN" ] || { echo "Maven login did not provide a token" >&2; exit 1; }
+        export PUBLISH_MAVEN_BASE_URL PUBLISH_VISIBILITY PUBLISH_CHANNEL
+        export PUBLISH_MAVEN_REPOSITORY PUBLISH_USER PUBLISH_TOKEN
+        bash -c "$PUBLISH_COMMAND"

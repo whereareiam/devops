@@ -1,0 +1,161 @@
+name: Publish Docker image
+description: Build and publish a Docker/OCI image to Artifact Keeper or another registry
+
+inputs:
+  # Destination
+  registry:
+    description: Registry hostname
+    required: false
+    default: registry.whereareiam.me
+  visibility:
+    description: Artifact Keeper repository visibility, either private or public
+    required: false
+    default: private
+  namespace:
+    description: Image namespace
+    required: false
+    default: whereareiam
+  image:
+    description: Image name; defaults to the GitHub repository name
+    required: false
+    default: ""
+  repository:
+    description: Optional fully-qualified repository override
+    required: false
+    default: ""
+  tags:
+    description: Newline-separated image tags
+    required: true
+
+  # Build
+  dockerfile:
+    description: Dockerfile path
+    required: false
+    default: Dockerfile
+  context:
+    description: Docker build context
+    required: false
+    default: .
+
+  # Authentication (the Toolkit GitHub OIDC profile is used by default)
+  registry-username:
+    description: Optional registry username for a legacy or local runner
+    required: false
+    default: ""
+  registry-token:
+    description: Optional registry token or password for a legacy or local runner
+    required: false
+    default: ""
+  artifact-keeper-url:
+    description: Artifact Keeper base URL; override for another installation
+    required: false
+    default: https://maven.whereareiam.me
+  ci-provider-id:
+    description: Artifact Keeper CI-OIDC provider UUID; override for another project
+    required: false
+    default: bb42817c-b0e2-4bea-ab22-d7b3db257f82
+  oidc-audience:
+    description: CI OIDC audience; override for another issuer
+    required: false
+    default: artifact-keeper-whereareiam-github
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve repository
+      id: resolve
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        VISIBILITY: ${{ inputs.visibility }}
+        NAMESPACE: ${{ inputs.namespace }}
+        IMAGE: ${{ inputs.image }}
+        OVERRIDE: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        if [ -n "$OVERRIDE" ]; then
+          echo "repository=$OVERRIDE" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        case "${VISIBILITY,,}" in
+          private|public) ;;
+          *) echo "visibility must be private or public" >&2; exit 1 ;;
+        esac
+        image="${IMAGE:-${GITHUB_REPOSITORY##*/}}"
+        for value in "$REGISTRY" "$NAMESPACE" "$image"; do
+          [ -n "$value" ] || { echo "registry, namespace, and image are required" >&2; exit 1; }
+        done
+        echo "repository=${REGISTRY%/}/docker-${VISIBILITY,,}/${NAMESPACE#/}/${image#/}" >> "$GITHUB_OUTPUT"
+
+    - name: Login to registry
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        REGISTRY_TOKEN: ${{ inputs.registry-token }}
+        ARTIFACT_KEEPER_URL: ${{ inputs.artifact-keeper-url }}
+        CI_PROVIDER_ID: ${{ inputs.ci-provider-id }}
+        OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
+      run: |
+        set -euo pipefail
+        if [ -z "$REGISTRY_USERNAME" ] && [ -z "$REGISTRY_TOKEN" ]; then
+          export AK_URL="$ARTIFACT_KEEPER_URL"
+          export AK_PROVIDER_ID="$CI_PROVIDER_ID"
+          export AK_AUDIENCE="$OIDC_AUDIENCE"
+          source "$GITHUB_ACTION_PATH/../oidc-login/login.sh"
+          REGISTRY_USERNAME="$ARTIFACT_KEEPER_USER"
+          REGISTRY_TOKEN="$ARTIFACT_KEEPER_TOKEN"
+        fi
+        [ -n "$REGISTRY_USERNAME" ] || { echo "registry login did not provide a username" >&2; exit 1; }
+        [ -n "$REGISTRY_TOKEN" ] || { echo "registry login did not provide a token" >&2; exit 1; }
+        echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
+
+    - name: Export image reference
+      id: image-ref
+      shell: bash
+      env:
+        REPOSITORY: ${{ steps.resolve.outputs.repository }}
+        TAGS: ${{ inputs.tags }}
+      run: |
+        set -euo pipefail
+        tag="$(printf '%s\n' "$TAGS" | sed -n '/[^[:space:]]/ { s/[[:space:]]*$//; p; q; }')"
+        [ -n "$tag" ] || { echo "at least one tag is required" >&2; exit 1; }
+        echo "repository=$REPOSITORY" >> "$GITHUB_OUTPUT"
+        echo "image_ref=$REPOSITORY:$tag" >> "$GITHUB_OUTPUT"
+
+    - name: Build image
+      shell: bash
+      env:
+        REPOSITORY: ${{ steps.resolve.outputs.repository }}
+        TAGS: ${{ inputs.tags }}
+        DOCKERFILE: ${{ inputs.dockerfile }}
+        CONTEXT: ${{ inputs.context }}
+      run: |
+        set -euo pipefail
+        args=()
+        while IFS= read -r tag; do
+          [ -n "$tag" ] || continue
+          args+=(--tag "$REPOSITORY:$tag")
+        done <<< "$TAGS"
+        [ "${#args[@]}" -gt 0 ] || { echo "at least one tag is required" >&2; exit 1; }
+        docker build --file "$DOCKERFILE" "${args[@]}" "$CONTEXT"
+
+    - name: Push image
+      shell: bash
+      env:
+        REPOSITORY: ${{ steps.resolve.outputs.repository }}
+        TAGS: ${{ inputs.tags }}
+      run: |
+        set -euo pipefail
+        while IFS= read -r tag; do
+          [ -n "$tag" ] || continue
+          docker push "$REPOSITORY:$tag"
+        done <<< "$TAGS"
+
+outputs:
+  repository:
+    description: Fully-qualified image repository without a tag
+    value: ${{ steps.image-ref.outputs.repository }}
+  image_ref:
+    description: Fully-qualified image reference using the first supplied tag
+    value: ${{ steps.image-ref.outputs.image_ref }}

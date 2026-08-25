@@ -1,0 +1,35 @@
+name: Artifact Keeper OIDC login
+description: Exchange a Forgejo or GitHub Actions OIDC token for a short-lived Artifact Keeper token
+
+inputs:
+  artifact-keeper-url:
+    description: Optional Artifact Keeper base URL override
+    required: false
+    default: ""
+  ci-provider-id:
+    description: Optional Artifact Keeper CI-OIDC provider UUID override
+    required: false
+    default: ""
+  oidc-audience:
+    description: Optional audience override for the CI OIDC issuer
+    required: false
+    default: ""
+
+outputs:
+  username:
+    description: Short-lived Artifact Keeper CI username
+    value: ${{ steps.login.outputs.username }}
+  token:
+    description: Short-lived Artifact Keeper access token
+    value: ${{ steps.login.outputs.token }}
+
+runs:
+  using: composite
+  steps:
+    - id: login
+      shell: bash
+      env:
+        AK_URL: ${{ inputs.artifact-keeper-url }}
+        AK_PROVIDER_ID: ${{ inputs.ci-provider-id }}
+        AK_AUDIENCE: ${{ inputs.oidc-audience }}
+      run: bash "$GITHUB_ACTION_PATH/login.sh"
