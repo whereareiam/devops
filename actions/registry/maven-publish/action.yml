@@ -12,7 +12,7 @@ inputs:
     required: false
     default: private
   channel:
-    description: Maven channel; select release only for a release workflow
+    description: Version channel; select release only for a release workflow
     required: false
     default: development
   repository:
@@ -71,7 +71,7 @@ runs:
         PUBLISH_MAVEN_BASE_URL: ${{ inputs.maven-base-url }}
         PUBLISH_VISIBILITY: ${{ inputs.visibility }}
         PUBLISH_CHANNEL: ${{ inputs.channel }}
-        PUBLISH_MAVEN_REPOSITORY: ${{ inputs.repository }}
+        PUBLISH_MAVEN_REPOSITORY: ${{ inputs.repository || format('maven-{0}', inputs.visibility) }}
         PUBLISH_USER: ${{ inputs.registry-username }}
         PUBLISH_TOKEN: ${{ inputs.registry-token }}
         ARTIFACT_KEEPER_URL: ${{ inputs.artifact-keeper-url }}
