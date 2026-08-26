@@ -16,7 +16,7 @@ inputs:
     required: false
     default: development
   repository:
-    description: Optional exact Maven repository key override
+    description: Optional exact Maven repository key override; defaults to packages or packages-private
     required: false
     default: ""
   # Authentication (the Toolkit GitHub OIDC profile is used by default)
@@ -71,7 +71,7 @@ runs:
         PUBLISH_MAVEN_BASE_URL: ${{ inputs.maven-base-url }}
         PUBLISH_VISIBILITY: ${{ inputs.visibility }}
         PUBLISH_CHANNEL: ${{ inputs.channel }}
-        PUBLISH_MAVEN_REPOSITORY: ${{ inputs.repository || format('maven-{0}', inputs.visibility) }}
+        PUBLISH_MAVEN_REPOSITORY: ${{ inputs.repository }}
         PUBLISH_USER: ${{ inputs.registry-username }}
         PUBLISH_TOKEN: ${{ inputs.registry-token }}
         ARTIFACT_KEEPER_URL: ${{ inputs.artifact-keeper-url }}
@@ -80,6 +80,12 @@ runs:
         PUBLISH_COMMAND: ${{ inputs.command }}
       run: |
         set -euo pipefail
+        if [ -z "$PUBLISH_MAVEN_REPOSITORY" ]; then
+          case "${PUBLISH_VISIBILITY,,}" in
+            public) PUBLISH_MAVEN_REPOSITORY=packages ;;
+            private) PUBLISH_MAVEN_REPOSITORY=packages-private ;;
+          esac
+        fi
         if [ -z "$PUBLISH_USER" ] && [ -z "$PUBLISH_TOKEN" ]; then
           export AK_URL="$ARTIFACT_KEEPER_URL"
           export AK_PROVIDER_ID="$CI_PROVIDER_ID"

@@ -16,4 +16,5 @@ use their repository-bound OIDC profile automatically; the Artifact Keeper
 provider ID is internal action configuration, not a workflow setting. The
 three OIDC inputs remain available only for a deliberately configured custom
 profile. Static registry credentials remain supported for local or legacy
-runners.
+runners. Maven uses `packages` and `packages-private`; Docker/OCI uses `images`
+and `images-private`.

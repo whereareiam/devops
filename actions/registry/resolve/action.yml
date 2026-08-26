@@ -44,4 +44,8 @@ runs:
         for value in "$REGISTRY" "$NAMESPACE" "$image"; do
           [ -n "$value" ] || { echo "registry, namespace, and image are required" >&2; exit 1; }
         done
-        echo "repository=${REGISTRY%/}/docker-${VISIBILITY,,}/${NAMESPACE#/}/${image#/}" >> "$GITHUB_OUTPUT"
+        repository=images
+        if [ "${VISIBILITY,,}" = private ]; then
+          repository=images-private
+        fi
+        echo "repository=${REGISTRY%/}/$repository/${NAMESPACE#/}/${image#/}" >> "$GITHUB_OUTPUT"
