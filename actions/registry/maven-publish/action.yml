@@ -11,10 +11,6 @@ inputs:
     description: Repository visibility, either private or public
     required: false
     default: private
-  channel:
-    description: Version channel; select release only for a release workflow
-    required: false
-    default: development
   repository:
     description: Optional exact Maven repository key override; defaults to packages or packages-private
     required: false
@@ -58,11 +54,9 @@ runs:
       shell: bash
       env:
         VISIBILITY: ${{ inputs.visibility }}
-        CHANNEL: ${{ inputs.channel }}
       run: |
         set -euo pipefail
         case "${VISIBILITY,,}" in private|public) ;; *) echo "visibility must be private or public" >&2; exit 1 ;; esac
-        case "${CHANNEL,,}" in release|development) ;; *) echo "channel must be release or development" >&2; exit 1 ;; esac
 
     - name: Publish Maven artifacts
       shell: bash
@@ -70,7 +64,6 @@ runs:
       env:
         PUBLISH_MAVEN_BASE_URL: ${{ inputs.maven-base-url }}
         PUBLISH_VISIBILITY: ${{ inputs.visibility }}
-        PUBLISH_CHANNEL: ${{ inputs.channel }}
         PUBLISH_MAVEN_REPOSITORY: ${{ inputs.repository }}
         PUBLISH_USER: ${{ inputs.registry-username }}
         PUBLISH_TOKEN: ${{ inputs.registry-token }}
@@ -96,6 +89,6 @@ runs:
         fi
         [ -n "$PUBLISH_USER" ] || { echo "Maven login did not provide a username" >&2; exit 1; }
         [ -n "$PUBLISH_TOKEN" ] || { echo "Maven login did not provide a token" >&2; exit 1; }
-        export PUBLISH_MAVEN_BASE_URL PUBLISH_VISIBILITY PUBLISH_CHANNEL
+        export PUBLISH_MAVEN_BASE_URL PUBLISH_VISIBILITY
         export PUBLISH_MAVEN_REPOSITORY PUBLISH_USER PUBLISH_TOKEN
         bash -c "$PUBLISH_COMMAND"
