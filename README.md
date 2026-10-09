@@ -17,7 +17,6 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 
 | Action | Purpose |
 | --- | --- |
-| `composite/package/docker/docs-site` | Builds a Docusaurus site, packages it as an image and pushes it. |
 | `composite/package/docker/publish` | Signs in, builds an image and pushes it with explicit public or private visibility. |
 | `composite/package/maven/publish` | Signs in and runs a Gradle or Maven command that publishes to a Maven repository. |
 | `primitive/auth/artifact-keeper/request-token` | Exchanges the job's OIDC token for a short-lived Artifact Keeper token. |
@@ -119,7 +118,7 @@ the API and never checks out its code, so it is safe under `pull_request_target`
 
 ## Moving from v2
 
-`v3` only moves the existing actions; their inputs and outputs are unchanged.
+`v3` moves the existing actions; their inputs and outputs are unchanged. The docs site action is removed.
 
 | v2 | v3 |
 | --- | --- |
@@ -127,7 +126,7 @@ the API and never checks out its code, so it is safe under `pull_request_target`
 | `actions/registry/resolve` | `primitive/metadata/image/resolve-repository` |
 | `actions/registry/docker-publish` | `composite/package/docker/publish` |
 | `actions/registry/maven-publish` | `composite/package/maven/publish` |
-| `actions/publish-docs-site` | `composite/package/docker/docs-site` |
+| `actions/publish-docs-site` | Removed |
 
 ## Tools
 
