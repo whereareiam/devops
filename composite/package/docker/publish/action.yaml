@@ -106,7 +106,7 @@ runs:
           export AK_URL="$ARTIFACT_KEEPER_URL"
           export AK_PROVIDER_ID="$CI_PROVIDER_ID"
           export AK_AUDIENCE="$OIDC_AUDIENCE"
-          source "$GITHUB_ACTION_PATH/../oidc-login/login.sh"
+          source "$GITHUB_ACTION_PATH/../../../../primitive/auth/artifact-keeper/request-token/login.sh"
           REGISTRY_USERNAME="$ARTIFACT_KEEPER_USER"
           REGISTRY_TOKEN="$ARTIFACT_KEEPER_TOKEN"
         fi
