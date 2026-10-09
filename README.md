@@ -22,7 +22,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | `primitive/auth/artifact-keeper/request-token` | Exchanges the job's OIDC token for a short-lived Artifact Keeper token. |
 | `primitive/metadata/image/resolve-repository` | Resolves the repository an image of the current GitHub repository lives in. |
 | `primitive/pull-request/validate-metadata` | Checks that a pull request's title and labels fit a changelog built from pull requests. |
-| `primitive/report/junit/publish` | Uploads JUnit results and reports as an artifact and summarizes the failed tests. |
+| `primitive/report/junit/publish` | Summarizes the failed tests and uploads JUnit results and reports when a test failed. |
 | `primitive/setup/gradle` | Installs the JDK that runs Gradle, further toolchain JDKs, and Gradle with one cache policy. |
 
 Registry actions default to private whereareiam destinations; select `visibility: public`
@@ -89,10 +89,13 @@ for jobs that only need the reference.
   if: always()
   with:
     name: Unit test results
+    artifact-name: test-results
 ```
 
-The job needs `checks: write` for the summary. On a pull request from a fork the results are still
-uploaded, but the summary is skipped because the fork's token cannot write it.
+The summary on the run lists the failed tests under `name`. The result files and HTML reports are
+uploaded as `artifact-name` only when a test failed or errored; `upload: always` uploads them on
+every run. The job needs `checks: write` for the summary. On a pull request from a fork the
+summary is skipped, because the fork's token cannot write it.
 
 ## Validating pull requests
 

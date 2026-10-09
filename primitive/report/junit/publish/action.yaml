@@ -1,10 +1,18 @@
 name: Publish JUnit results
-description: Upload JUnit result files and HTML reports as one artifact and summarize the failed tests
+description: Summarize the failed tests on the run and upload the result files and HTML reports when a test failed
 
 inputs:
   name:
-    description: Unique name of the artifact and of the summary, such as "Unit test results"
+    description: Heading of the summary, such as "Unit test results"
     required: true
+  artifact-name:
+    description: Unique name of the uploaded artifact; defaults to the summary heading
+    required: false
+    default: ""
+  upload:
+    description: When the artifact is uploaded, on-failure (a test failed or errored) or always
+    required: false
+    default: on-failure
   results:
     description: Glob of the JUnit XML result files
     required: false
@@ -21,10 +29,27 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Look for failed tests
+      id: results
+      shell: bash
+      env:
+        UPLOAD: ${{ inputs.upload }}
+        RESULTS: ${{ inputs.results }}
+      run: |
+        set -euo pipefail
+        case "$UPLOAD" in on-failure|always) ;; *) echo "upload must be on-failure or always" >&2; exit 1 ;; esac
+        shopt -s globstar nullglob
+        files=($RESULTS)
+        failed=false
+        if (( ${#files[@]} > 0 )) && grep -qlE '<(failure|error)[ />]' "${files[@]}"; then failed=true; fi
+        echo "found=$(( ${#files[@]} > 0 ))" >> "$GITHUB_OUTPUT"
+        echo "failed=$failed" >> "$GITHUB_OUTPUT"
+
     - name: Upload results
+      if: ${{ inputs.upload == 'always' || steps.results.outputs.failed == 'true' }}
       uses: actions/upload-artifact@v6
       with:
-        name: ${{ inputs.name }}
+        name: ${{ inputs.artifact-name || inputs.name }}
         path: |
           ${{ inputs.results }}
           ${{ inputs.reports }}
@@ -34,7 +59,7 @@ runs:
     # A pull request from a fork has a read-only token, which cannot write the summary's check.
     - name: Summarize failed tests
       if: >-
-        ${{ !cancelled() && hashFiles(inputs.results) != ''
+        ${{ !cancelled() && steps.results.outputs.found == '1'
         && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
       uses: dorny/test-reporter@v3
       with:
