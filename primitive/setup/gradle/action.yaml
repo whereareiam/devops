@@ -1,0 +1,52 @@
+name: Set up Gradle
+description: Install the JDK that runs Gradle, any further toolchain JDKs, and Gradle with one cache policy
+
+inputs:
+  java-version:
+    description: JDK that runs Gradle
+    required: false
+    default: "21"
+  toolchain-versions:
+    description: Newline-separated further JDK versions that Gradle toolchains compile or test with
+    required: false
+    default: ""
+  java-distribution:
+    description: JDK distribution
+    required: false
+    default: temurin
+  cache:
+    description: >-
+      Gradle cache policy: read-write, read-only, or auto. With auto, pushes to the default branch,
+      releases and manual runs write the cache and every other run only reads it
+    required: false
+    default: auto
+
+runs:
+  using: composite
+  steps:
+    - name: Validate cache policy
+      shell: bash
+      env:
+        CACHE: ${{ inputs.cache }}
+      run: |
+        set -euo pipefail
+        case "$CACHE" in auto|read-write|read-only) ;; *) echo "cache must be auto, read-write or read-only" >&2; exit 1 ;; esac
+
+    # The last listed JDK becomes JAVA_HOME, so the one that runs Gradle comes last.
+    - name: Install JDKs
+      uses: actions/setup-java@v5
+      with:
+        distribution: ${{ inputs.java-distribution }}
+        java-version: |
+          ${{ inputs.toolchain-versions }}
+          ${{ inputs.java-version }}
+
+    - name: Install Gradle
+      uses: gradle/actions/setup-gradle@v5
+      with:
+        cache-read-only: >-
+          ${{ inputs.cache == 'read-only'
+          || (inputs.cache == 'auto'
+          && github.event_name != 'release'
+          && github.event_name != 'workflow_dispatch'
+          && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)) }}

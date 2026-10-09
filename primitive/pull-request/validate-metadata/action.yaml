@@ -1,0 +1,42 @@
+name: Validate pull request metadata
+description: Check that a pull request title and its labels fit a changelog built from pull requests
+
+inputs:
+  pull-request:
+    description: Pull request number; defaults to the pull request of the event
+    required: false
+    default: ${{ github.event.pull_request.number }}
+  title-pattern:
+    description: 'Extended regular expression the title must match; the default accepts "Area: Description"'
+    required: false
+    default: "^[A-Za-z][A-Za-z0-9 /_-]*!?: .+$"
+  title-format:
+    description: How the failure message describes the expected title
+    required: false
+    default: "Area: Description"
+  category-labels:
+    description: Comma-separated labels of which the pull request carries exactly one
+    required: false
+    default: feature,change,bug,dependencies
+  skip-label:
+    description: Label that keeps a pull request out of the changelog and replaces the category label
+    required: false
+    default: skip-changelog
+  token:
+    description: Token that can read the pull request
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate title and labels
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        PULL_REQUEST: ${{ inputs.pull-request }}
+        TITLE_PATTERN: ${{ inputs.title-pattern }}
+        TITLE_FORMAT: ${{ inputs.title-format }}
+        CATEGORY_LABELS: ${{ inputs.category-labels }}
+        SKIP_LABEL: ${{ inputs.skip-label }}
+      run: bash "$GITHUB_ACTION_PATH/validate.sh"

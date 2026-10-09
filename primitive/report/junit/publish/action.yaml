@@ -1,0 +1,47 @@
+name: Publish JUnit results
+description: Upload JUnit result files and HTML reports as one artifact and summarize the failed tests
+
+inputs:
+  name:
+    description: Unique name of the artifact and of the summary, such as "Unit test results"
+    required: true
+  results:
+    description: Glob of the JUnit XML result files
+    required: false
+    default: "**/build/test-results/**/*.xml"
+  reports:
+    description: Glob of further report files to upload with the results
+    required: false
+    default: "**/build/reports/tests/**"
+  retention-days:
+    description: Days the artifact is kept
+    required: false
+    default: "14"
+
+runs:
+  using: composite
+  steps:
+    - name: Upload results
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ inputs.name }}
+        path: |
+          ${{ inputs.results }}
+          ${{ inputs.reports }}
+        if-no-files-found: ignore
+        retention-days: ${{ inputs.retention-days }}
+
+    # A pull request from a fork has a read-only token, which cannot write the summary's check.
+    - name: Summarize failed tests
+      if: >-
+        ${{ !cancelled() && hashFiles(inputs.results) != ''
+        && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+      uses: dorny/test-reporter@v3
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.results }}
+        reporter: java-junit
+        use-actions-summary: "true"
+        list-suites: failed
+        list-tests: failed
+        fail-on-error: "false"
