@@ -1,0 +1,79 @@
+name: Set up Docker images
+description: >-
+  Load Docker images into the job's engine from the Actions cache, and pull and cache them only when the cache has
+  none for exactly these references
+
+inputs:
+  images:
+    description: Newline-separated image references, such as eclipse-temurin:21-jdk
+    required: true
+  cache:
+    description: >-
+      Cache policy: read-write, read-only, or auto. With auto, pushes to the default branch, releases and manual runs
+      write the cache and every other run only reads it
+    required: false
+    default: auto
+
+outputs:
+  cache-hit:
+    description: Whether the images came from the cache rather than from their registries
+    value: ${{ steps.restore.outputs.cache-hit == 'true' }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve images and cache key
+      id: images
+      shell: bash
+      env:
+        IMAGES: ${{ inputs.images }}
+        CACHE: ${{ inputs.cache }}
+        WRITES: >-
+          ${{ inputs.cache == 'read-write'
+          || (inputs.cache == 'auto'
+          && (github.event_name == 'release'
+          || github.event_name == 'workflow_dispatch'
+          || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))) }}
+      run: |
+        set -euo pipefail
+        case "$CACHE" in auto|read-write|read-only) ;; *) echo "cache must be auto, read-write or read-only" >&2; exit 1 ;; esac
+        list="$(printf '%s\n' "$IMAGES" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | sort -u)"
+        if [[ -z "$list" ]]; then echo "images must name at least one image" >&2; exit 1; fi
+        printf '%s\n' "$list" > "$RUNNER_TEMP/docker-images.list"
+        hash="$(sha256sum "$RUNNER_TEMP/docker-images.list" | cut -c1-16)"
+        {
+          echo "key=docker-images-$RUNNER_OS-$hash"
+          echo "archive=$RUNNER_TEMP/docker-images-$hash.tar"
+          echo "writes=$WRITES"
+        } >> "$GITHUB_OUTPUT"
+
+    # The key holds every reference, so another image or tag is a new entry and an unchanged list never downloads.
+    - name: Restore images
+      id: restore
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ steps.images.outputs.archive }}
+        key: ${{ steps.images.outputs.key }}
+
+    - name: Load or pull images
+      shell: bash
+      env:
+        ARCHIVE: ${{ steps.images.outputs.archive }}
+        HIT: ${{ steps.restore.outputs.cache-hit }}
+        WRITES: ${{ steps.images.outputs.writes }}
+      run: |
+        set -euo pipefail
+        mapfile -t images < "$RUNNER_TEMP/docker-images.list"
+        if [[ "$HIT" == "true" ]]; then
+          docker load --input "$ARCHIVE"
+          exit 0
+        fi
+        for image in "${images[@]}"; do docker pull "$image"; done
+        if [[ "$WRITES" == "true" ]]; then docker save --output "$ARCHIVE" "${images[@]}"; fi
+
+    - name: Save images
+      if: steps.restore.outputs.cache-hit != 'true' && steps.images.outputs.writes == 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ steps.images.outputs.archive }}
+        key: ${{ steps.images.outputs.key }}

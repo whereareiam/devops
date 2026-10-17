@@ -7,6 +7,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | Task | Start here |
 | --- | --- |
 | Install JDKs and Gradle in a job | [Setting up Gradle](#setting-up-gradle) |
+| Give a job's tests Docker images without pulling them every run | [Setting up Docker images](#setting-up-docker-images) |
 | Publish Maven artifacts to the registry | [Publishing Maven artifacts](#publishing-maven-artifacts) |
 | Build and push a Docker image | [Publishing images](#publishing-images) |
 | Show test results on a run | [Reporting test results](#reporting-test-results) |
@@ -23,6 +24,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | `primitive/metadata/image/resolve-repository` | Resolves the repository an image of the current GitHub repository lives in. |
 | `primitive/pull-request/validate-metadata` | Checks that a pull request's title and labels fit a changelog built from pull requests. |
 | `primitive/report/junit/publish` | Summarizes the failed tests and uploads JUnit results and reports when a test failed. |
+| `primitive/setup/docker-images` | Loads Docker images from the Actions cache, and pulls and caches them only when the cache has none for these references. |
 | `primitive/setup/gradle` | Installs the JDK that runs Gradle, further toolchain JDKs, and Gradle with one cache policy. |
 
 Registry actions default to private whereareiam destinations; select `visibility: public`
@@ -45,6 +47,26 @@ or legacy runners.
 toolchains. With the default `cache: auto`, pushes to the default branch, releases and manual runs
 write the Gradle cache, and every other run, such as a pull request, only reads it. Set
 `read-write` or `read-only` to decide yourself.
+
+## Setting up Docker images
+
+```yaml
+- uses: whereareiam/devops/primitive/setup/docker-images@v3
+  with:
+    images: |
+      eclipse-temurin:21-jdk
+      postgres:17
+```
+
+Run it before the tests that need the images. It loads the images into the job's Docker engine from one
+Actions cache entry, keyed by the sorted list of references, so a registry is asked only when the list
+changes or the entry has expired. The cache policy matches [Setting up Gradle](#setting-up-gradle): with
+the default `cache: auto`, pushes to the default branch, releases and manual runs pull a missing entry and
+save it, and every other run, such as a pull request, only reads it and pulls without saving on a miss.
+The `cache-hit` output tells whether the images came from the cache.
+
+Name an image by a tag that does not move, or by its digest, when a test must not pick up a newer
+image: the entry for a reference is kept until it expires, even if the registry's tag moved meanwhile.
 
 ## Publishing Maven artifacts
 
