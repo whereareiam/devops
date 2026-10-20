@@ -35,15 +35,7 @@ runs:
       env:
         UPLOAD: ${{ inputs.upload }}
         RESULTS: ${{ inputs.results }}
-      run: |
-        set -euo pipefail
-        case "$UPLOAD" in on-failure|always) ;; *) echo "upload must be on-failure or always" >&2; exit 1 ;; esac
-        shopt -s globstar nullglob
-        files=($RESULTS)
-        failed=false
-        if (( ${#files[@]} > 0 )) && grep -qlE '<(failure|error)[ />]' "${files[@]}"; then failed=true; fi
-        echo "found=$(( ${#files[@]} > 0 ))" >> "$GITHUB_OUTPUT"
-        echo "failed=$failed" >> "$GITHUB_OUTPUT"
+      run: bash "$GITHUB_ACTION_PATH/results.sh"
 
     - name: Upload results
       if: ${{ inputs.upload == 'always' || steps.results.outputs.failed == 'true' }}

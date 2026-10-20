@@ -56,7 +56,8 @@ runs:
         VISIBILITY: ${{ inputs.visibility }}
       run: |
         set -euo pipefail
-        case "${VISIBILITY,,}" in private|public) ;; *) echo "visibility must be private or public" >&2; exit 1 ;; esac
+        visibility="$(printf '%s' "$VISIBILITY" | tr '[:upper:]' '[:lower:]')"
+        case "$visibility" in private|public) ;; *) echo "visibility must be private or public" >&2; exit 1 ;; esac
 
     - name: Publish Maven artifacts
       shell: bash
@@ -74,7 +75,7 @@ runs:
       run: |
         set -euo pipefail
         if [ -z "$PUBLISH_MAVEN_REPOSITORY" ]; then
-          case "${PUBLISH_VISIBILITY,,}" in
+          case "$(printf '%s' "$PUBLISH_VISIBILITY" | tr '[:upper:]' '[:lower:]')" in
             public) PUBLISH_MAVEN_REPOSITORY=packages ;;
             private) PUBLISH_MAVEN_REPOSITORY=packages-private ;;
           esac

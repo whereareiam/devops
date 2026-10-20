@@ -63,7 +63,8 @@ runs:
         WRITES: ${{ steps.images.outputs.writes }}
       run: |
         set -euo pipefail
-        mapfile -t images < "$RUNNER_TEMP/docker-images.list"
+        images=()
+        while IFS= read -r image; do images+=("$image"); done < "$RUNNER_TEMP/docker-images.list"
         if [[ "$HIT" == "true" ]]; then
           docker load --input "$ARCHIVE"
           exit 0

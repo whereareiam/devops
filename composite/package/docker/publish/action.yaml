@@ -77,7 +77,8 @@ runs:
           echo "repository=$OVERRIDE" >> "$GITHUB_OUTPUT"
           exit 0
         fi
-        case "${VISIBILITY,,}" in
+        visibility="$(printf '%s' "$VISIBILITY" | tr '[:upper:]' '[:lower:]')"
+        case "$visibility" in
           private|public) ;;
           *) echo "visibility must be private or public" >&2; exit 1 ;;
         esac
@@ -86,7 +87,7 @@ runs:
           [ -n "$value" ] || { echo "registry, namespace, and image are required" >&2; exit 1; }
         done
         repository=images
-        if [ "${VISIBILITY,,}" = private ]; then
+        if [ "$visibility" = private ]; then
           repository=images-private
         fi
         echo "repository=${REGISTRY%/}/$repository/${NAMESPACE#/}/${image#/}" >> "$GITHUB_OUTPUT"
