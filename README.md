@@ -1,6 +1,6 @@
 # devops
 
-Reusable GitHub Actions and infrastructure tools. A `primitive/<domain>/<thing>/<verb>` action does
+Reusable GitHub Actions and infrastructure tools for builds, tests and pull requests. A `primitive/<domain>/<thing>/<verb>` action does
 one thing; a `composite/...` action combines primitives into a flow. Reference an action by its
 major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 
@@ -12,6 +12,8 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | Build and push a Docker image | [Publishing images](#publishing-images) |
 | Show test results on a run | [Reporting test results](#reporting-test-results) |
 | Check a pull request's title and labels | [Validating pull requests](#validating-pull-requests) |
+| Pick the Xcode a macOS job builds with | [Setting up Xcode](#setting-up-xcode) |
+| Test Swift packages and report the results | [Testing Swift packages](#testing-swift-packages) |
 | Move a workflow from `v2` | [Moving from v2](#moving-from-v2) |
 
 ## All actions
@@ -26,6 +28,8 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | `primitive/report/junit/publish` | Summarizes the failed tests and uploads JUnit results and reports when a test failed. |
 | `primitive/setup/docker-images` | Loads Docker images from the Actions cache, and pulls and caches them only when the cache has none for these references. |
 | `primitive/setup/gradle` | Installs the JDK that runs Gradle, further toolchain JDKs, and Gradle with one cache policy. |
+| `primitive/setup/xcode` | Selects the newest installed Xcode at or above a minimum version through `DEVELOPER_DIR`. |
+| `primitive/test/swift/run` | Runs `swift test` for each Swift package and writes JUnit results. |
 
 Registry actions default to private whereareiam destinations; select `visibility: public`
 explicitly. Maven uses the `packages` and `packages-private` repositories, images use `images` and
@@ -140,6 +144,42 @@ The title must read `Area: Description`, and the pull request must carry exactly
 `feature`, `change`, `bug` and `dependencies`, or `skip-changelog`. `title-pattern`,
 `category-labels` and `skip-label` change those rules. The action reads the pull request through
 the API and never checks out its code, so it is safe under `pull_request_target`.
+
+## Setting up Xcode
+
+```yaml
+- uses: whereareiam/devops/primitive/setup/xcode@v3
+  with:
+    minimum-version: "27"
+```
+
+The action picks the newest Xcode in `/Applications` at or above `minimum-version` and exports
+`DEVELOPER_DIR`, so every later step of the job builds with it. It never runs `xcode-select`, which
+needs `sudo`, so it works the same on hosted and self-hosted Macs. `search-path` changes where it looks;
+the `path` and `version` outputs name the selected Xcode.
+
+## Testing Swift packages
+
+```yaml
+- uses: whereareiam/devops/primitive/test/swift/run@v3
+  with:
+    packages: |
+      App
+      Modules/*
+
+- uses: whereareiam/devops/primitive/report/junit/publish@v3
+  if: always()
+  with:
+    name: Test results
+    artifact-name: test-results
+    results: test-results/*.xml
+    reports: test-results/**
+```
+
+`packages` lists package paths or globs, one per line; every directory with a `Package.swift` is
+tested. Each package writes its XCTest and Swift Testing results to `results-directory`, and the
+action fails when any package fails, after testing all of them. `arguments` passes further options
+to `swift test`.
 
 ## Moving from v2
 

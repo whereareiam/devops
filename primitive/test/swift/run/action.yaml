@@ -1,0 +1,54 @@
+name: Run Swift package tests
+description: Run swift test for each Swift package and write JUnit results for primitive/report/junit/publish
+
+inputs:
+  packages:
+    description: Newline-separated paths or globs of Swift packages, relative to the working directory
+    required: false
+    default: "."
+  results-directory:
+    description: Directory the JUnit result files are written to, one pair per package
+    required: false
+    default: test-results
+  arguments:
+    description: Further arguments for swift test, for example --filter AppTests
+    required: false
+    default: ""
+
+outputs:
+  results:
+    description: Glob of the written JUnit result files, for the results input of primitive/report/junit/publish
+    value: ${{ inputs.results-directory }}/*.xml
+
+runs:
+  using: composite
+  steps:
+    # Every package is tested even after one fails, so the report shows all failures of the run.
+    - name: Test
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        RESULTS_DIRECTORY: ${{ inputs.results-directory }}
+        ARGUMENTS: ${{ inputs.arguments }}
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+        mkdir -p "$RESULTS_DIRECTORY"
+        read -r -a arguments <<< "$ARGUMENTS"
+        tested=0 failed=0
+        while IFS= read -r pattern; do
+          [[ -n "${pattern// }" ]] || continue
+          for package in $pattern; do
+            [[ -f "$package/Package.swift" ]] || continue
+            name="$(cd "$package" && basename "$PWD")"
+            echo "::group::swift test $package"
+            if ! swift test --package-path "$package" --parallel --xunit-output "$RESULTS_DIRECTORY/$name.xml" ${arguments[@]+"${arguments[@]}"}; then
+              failed=$((failed + 1))
+              echo "::error::Tests failed in $package"
+            fi
+            echo "::endgroup::"
+            tested=$((tested + 1))
+          done
+        done <<< "$PACKAGES"
+        (( tested > 0 )) || { echo "::error::No Swift package matches the packages input."; exit 1; }
+        (( failed == 0 ))
