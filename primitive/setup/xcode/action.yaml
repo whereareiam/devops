@@ -1,0 +1,49 @@
+name: Set up Xcode
+description: Select the newest installed Xcode at or above a minimum version for the rest of the job, without sudo
+
+inputs:
+  minimum-version:
+    description: Lowest acceptable Xcode version, for example 27 or 26.4
+    required: false
+    default: "0"
+  search-path:
+    description: Glob of the Xcode installations to choose from
+    required: false
+    default: /Applications/Xcode*.app
+
+outputs:
+  path:
+    description: Path of the selected Xcode application
+    value: ${{ steps.select.outputs.path }}
+  version:
+    description: Version of the selected Xcode, for example 27.1
+    value: ${{ steps.select.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    # DEVELOPER_DIR selects Xcode for every later step, so self-hosted runners need no sudo for xcode-select.
+    - name: Select Xcode
+      id: select
+      shell: bash
+      env:
+        MINIMUM_VERSION: ${{ inputs.minimum-version }}
+        SEARCH_PATH: ${{ inputs.search-path }}
+      run: |
+        set -euo pipefail
+        [[ "$MINIMUM_VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "minimum-version must be a version number" >&2; exit 1; }
+        newer_or_equal() { [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" == "$1" ]]; }
+        best="" best_version=""
+        shopt -s nullglob
+        for xcode in $SEARCH_PATH; do
+          version="$(defaults read "$xcode/Contents/Info" CFBundleShortVersionString 2>/dev/null || true)"
+          [[ -n "$version" ]] && newer_or_equal "$version" "$MINIMUM_VERSION" || continue
+          if [[ -z "$best" ]] || newer_or_equal "$version" "$best_version"; then
+            best="$xcode" best_version="$version"
+          fi
+        done
+        [[ -n "$best" ]] || { echo "::error::No Xcode $MINIMUM_VERSION or later matches $SEARCH_PATH."; exit 1; }
+        echo "DEVELOPER_DIR=$best/Contents/Developer" >> "$GITHUB_ENV"
+        echo "path=$best" >> "$GITHUB_OUTPUT"
+        echo "version=$best_version" >> "$GITHUB_OUTPUT"
+        DEVELOPER_DIR="$best/Contents/Developer" xcodebuild -version
