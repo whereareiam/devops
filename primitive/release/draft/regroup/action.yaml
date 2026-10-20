@@ -1,0 +1,95 @@
+name: Regroup draft release
+description: Regroup a draft release body by pull request title prefix, add the release notes file, and update the draft on GitHub
+
+inputs:
+  release-id:
+    description: Id of the GitHub release to update
+    required: true
+  release-body:
+    description: Markdown release body to regroup
+    required: true
+  grouping:
+    description: Grouping strategy, title-prefix; empty leaves the body as it is
+    required: false
+    default: title-prefix
+  developer-prefixes:
+    description: Comma-separated title prefixes of changes for developers, for example API; the title-prefix grouping moves them to a closing section
+    required: false
+    default: ""
+  developer-title:
+    description: Heading of the closing section for developer changes
+    required: false
+    default: For developers
+  notes-file:
+    description: Markdown file in the checked-out repository that replaces the text between the release notes markers of the draft; front matter names its version
+    required: false
+    default: ""
+  version:
+    description: Version of the draft, compared with the version of the notes file, for example the drafter's resolved version
+    required: false
+    default: ""
+  token:
+    description: Token that can update the release
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  body:
+    description: Regrouped draft release body
+    value: ${{ steps.regroup.outputs.body }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+
+    - name: Install the release tools
+      shell: bash
+      run: |
+        python -m pip install --quiet --upgrade pip
+        python -m pip install --quiet "$GITHUB_ACTION_PATH/../../../.."
+
+    - name: Regroup and update the draft
+      id: regroup
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        RELEASE_ID: ${{ inputs.release-id }}
+        RELEASE_BODY: ${{ inputs.release-body }}
+        GROUPING: ${{ inputs.grouping }}
+        DEVELOPER_PREFIXES: ${{ inputs.developer-prefixes }}
+        DEVELOPER_TITLE: ${{ inputs.developer-title }}
+        NOTES_FILE: ${{ inputs.notes-file }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        [[ "$RELEASE_ID" =~ ^[0-9]+$ ]] || { echo "release-id must be a number" >&2; exit 1; }
+        input_file="$(mktemp)"
+        output_file="$(mktemp)"
+        printf '%s' "$RELEASE_BODY" > "$input_file"
+        if [ -n "$NOTES_FILE" ] && [ -z "$VERSION" ]; then
+          echo "version is required with notes-file" >&2
+          exit 1
+        fi
+        devops-format-release-notes \
+          --format markdown \
+          --grouping "$GROUPING" \
+          --developer-prefixes "$DEVELOPER_PREFIXES" \
+          --developer-title "$DEVELOPER_TITLE" \
+          --notes-file "$NOTES_FILE" \
+          --version "$VERSION" \
+          --input-file "$input_file" \
+          --output-file "$output_file"
+
+        gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --silent -F body=@"$output_file"
+
+        delimiter="devops-$(openssl rand -hex 16)"
+        {
+          echo "body<<$delimiter"
+          cat "$output_file"
+          echo
+          echo "$delimiter"
+        } >> "$GITHUB_OUTPUT"

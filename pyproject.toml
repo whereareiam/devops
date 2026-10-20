@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devops-release"
+version = "0.1.0"
+description = "Release notes tooling for the devops GitHub Actions"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PyYAML>=6.0.1,<7",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.3.5,<9",
+]
+
+[project.scripts]
+devops-format-release-notes = "release.cli_format_release_notes:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

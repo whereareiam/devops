@@ -1,0 +1,60 @@
+name: Format release notes
+description: Convert GitHub release notes into another format, such as BBCode for a Spigot post
+
+inputs:
+  format:
+    description: Target format, for example bbcode or markdown
+    required: true
+  grouping:
+    description: Optional grouping strategy, for example title-prefix
+    required: false
+    default: ""
+  developer-prefixes:
+    description: Comma-separated title prefixes of changes for developers, for example API; the title-prefix grouping moves them to a closing section
+    required: false
+    default: ""
+  developer-title:
+    description: Heading of the closing section for developer changes
+    required: false
+    default: For developers
+  release-body:
+    description: Markdown release body to convert
+    required: true
+  output-file:
+    description: File the rendered notes are written to
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+
+    - name: Install the release tools
+      shell: bash
+      run: |
+        python -m pip install --quiet --upgrade pip
+        python -m pip install --quiet "$GITHUB_ACTION_PATH/../../../.."
+
+    - name: Format release notes
+      shell: bash
+      env:
+        FORMAT: ${{ inputs.format }}
+        GROUPING: ${{ inputs.grouping }}
+        DEVELOPER_PREFIXES: ${{ inputs.developer-prefixes }}
+        DEVELOPER_TITLE: ${{ inputs.developer-title }}
+        RELEASE_BODY: ${{ inputs.release-body }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+      run: |
+        set -euo pipefail
+        input_file="$(mktemp)"
+        printf '%s' "$RELEASE_BODY" > "$input_file"
+        devops-format-release-notes \
+          --format "$FORMAT" \
+          --grouping "$GROUPING" \
+          --developer-prefixes "$DEVELOPER_PREFIXES" \
+          --developer-title "$DEVELOPER_TITLE" \
+          --input-file "$input_file" \
+          --output-file "$OUTPUT_FILE"

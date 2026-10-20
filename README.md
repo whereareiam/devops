@@ -1,6 +1,6 @@
 # devops
 
-Reusable GitHub Actions and infrastructure tools for builds, tests and pull requests. A `primitive/<domain>/<thing>/<verb>` action does
+Reusable GitHub Actions and infrastructure tools for builds, tests, pull requests and releases. A `primitive/<domain>/<thing>/<verb>` action does
 one thing; a `composite/...` action combines primitives into a flow. Reference an action by its
 major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 
@@ -14,6 +14,9 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | Check a pull request's title and labels | [Validating pull requests](#validating-pull-requests) |
 | Pick the Xcode a macOS job builds with | [Setting up Xcode](#setting-up-xcode) |
 | Test Swift packages and report the results | [Testing Swift packages](#testing-swift-packages) |
+| Sort a release draft by title prefix and move developer changes apart | [Regrouping a release draft](#regrouping-a-release-draft) |
+| Turn release notes into another format, such as a BBCode post | [Formatting release notes](#formatting-release-notes) |
+| Move release actions from blockops `v4` | [Moving from blockops](#moving-from-blockops) |
 | Move a workflow from `v2` | [Moving from v2](#moving-from-v2) |
 
 ## All actions
@@ -25,6 +28,8 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | `primitive/auth/artifact-keeper/request-token` | Exchanges the job's OIDC token for a short-lived Artifact Keeper token. |
 | `primitive/metadata/image/resolve-repository` | Resolves the repository an image of the current GitHub repository lives in. |
 | `primitive/pull-request/validate-metadata` | Checks that a pull request's title and labels fit a changelog built from pull requests. |
+| `primitive/release/draft/regroup` | Regroups a draft release body by pull request title prefix, adds the release notes file, and updates the draft. |
+| `primitive/release/notes/format` | Converts release notes into another format, such as BBCode. |
 | `primitive/report/junit/publish` | Summarizes the failed tests and uploads JUnit results and reports when a test failed. |
 | `primitive/setup/docker-images` | Loads Docker images from the Actions cache, and pulls and caches them only when the cache has none for these references. |
 | `primitive/setup/gradle` | Installs the JDK that runs Gradle, further toolchain JDKs, and Gradle with one cache policy. |
@@ -181,6 +186,99 @@ tested. Each package writes its XCTest and Swift Testing results to `results-dir
 action fails when any package fails, after testing all of them. `arguments` passes further options
 to `swift test`.
 
+## Regrouping a release draft
+
+```yaml
+- id: drafter
+  uses: release-drafter/release-drafter@v7
+- uses: whereareiam/devops/primitive/release/draft/regroup@v3
+  with:
+    release-id: ${{ steps.drafter.outputs.id }}
+    release-body: ${{ steps.drafter.outputs.body }}
+```
+
+The job needs `contents: write`. The action uses the job's token unless `token` is set.
+
+The default `title-prefix` grouping sorts the changes of each category by the `Area:` prefix of
+their pull request title, so changes of one area stand together and keep their prefix.
+`developer-prefixes` names the areas that only concern developers, for example `API`. Their changes
+leave the categories and close the changelog in a `## For developers` section; `developer-title`
+renames that section.
+
+```yaml
+- uses: whereareiam/devops/primitive/release/draft/regroup@v3
+  with:
+    release-id: ${{ steps.drafter.outputs.id }}
+    release-body: ${{ steps.drafter.outputs.body }}
+    developer-prefixes: API
+```
+
+### Keeping hand-written notes
+
+release-drafter rebuilds the draft body on every run, so text typed into the draft is lost. Keep the
+hand-written part of a release, such as its subtitle, summary, and upgrade notes, in a file of the
+repository instead, and mark where it goes in the release-drafter `template`:
+
+```yaml
+template: |
+  <!-- release-notes:start -->
+  # Update $RESOLVED_VERSION - [Short subtitle]
+
+  [1-2 sentence summary of the release.]
+  <!-- release-notes:end -->
+
+  $CHANGES
+```
+
+The file starts with front matter that names the release it belongs to; its content replaces the
+text between the markers:
+
+```markdown
+---
+version: 3.0.0
+---
+
+# Update 3.0.0 - Shared Proxies
+
+Proxies now share their sessions.
+```
+
+Check out the repository and pass the file and the resolved version:
+
+```yaml
+- uses: actions/checkout@v7
+- id: drafter
+  uses: release-drafter/release-drafter@v7
+- uses: whereareiam/devops/primitive/release/draft/regroup@v3
+  with:
+    release-id: ${{ steps.drafter.outputs.id }}
+    release-body: ${{ steps.drafter.outputs.body }}
+    notes-file: .github/release-notes.md
+    version: ${{ steps.drafter.outputs.resolved_version }}
+```
+
+When the file names another version, for example a release that was already published, or does not
+exist, the draft keeps the text of the template. Bullets of the notes are never sorted as changes.
+
+## Formatting release notes
+
+```yaml
+- uses: whereareiam/devops/primitive/release/notes/format@v3
+  with:
+    format: bbcode
+    release-body: ${{ github.event.release.body }}
+    output-file: output/release-notes-bbcode.txt
+```
+
+## Moving from blockops
+
+The release actions of `whereareiam/blockops@v4` moved here unchanged; blockops `v5` no longer has them.
+
+| blockops v4 | devops v3 |
+| --- | --- |
+| `primitive/release/draft/regroup` | `primitive/release/draft/regroup` |
+| `primitive/release/notes/format` | `primitive/release/notes/format` |
+
 ## Moving from v2
 
 `v3` moves the existing actions; their inputs and outputs are unchanged. The docs site action is removed.
@@ -192,6 +290,12 @@ to `swift test`.
 | `actions/registry/docker-publish` | `composite/package/docker/publish` |
 | `actions/registry/maven-publish` | `composite/package/maven/publish` |
 | `actions/publish-docs-site` | Removed |
+
+## Development
+
+```shell
+uv run --extra test pytest
+```
 
 ## Tools
 
