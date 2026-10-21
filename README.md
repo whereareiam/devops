@@ -14,6 +14,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | Check a pull request's title and labels | [Validating pull requests](#validating-pull-requests) |
 | Pick the Xcode a macOS job builds with | [Setting up Xcode](#setting-up-xcode) |
 | Test Swift packages and report the results | [Testing Swift packages](#testing-swift-packages) |
+| Check that Swift sources follow the repository's formatting | [Checking Swift formatting](#checking-swift-formatting) |
 | Sort a release draft by title prefix and move developer changes apart | [Regrouping a release draft](#regrouping-a-release-draft) |
 | Turn release notes into another format, such as a BBCode post | [Formatting release notes](#formatting-release-notes) |
 | Move release actions from blockops `v4` | [Moving from blockops](#moving-from-blockops) |
@@ -35,6 +36,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | `primitive/setup/gradle` | Installs the JDK that runs Gradle, further toolchain JDKs, and Gradle with one cache policy. |
 | `primitive/setup/xcode` | Selects the newest installed Xcode at or above a minimum version through `DEVELOPER_DIR`. |
 | `primitive/test/swift/run` | Runs `swift test` for each Swift package and writes JUnit results. |
+| `primitive/lint/swift/run` | Runs `swift format lint` and annotates every finding. |
 
 Registry actions default to private whereareiam destinations; select `visibility: public`
 explicitly. Maven uses the `packages` and `packages-private` repositories, images use `images` and
@@ -185,6 +187,25 @@ the `path` and `version` outputs name the selected Xcode.
 tested. Each package writes its XCTest and Swift Testing results to `results-directory`, and the
 action fails when any package fails, after testing all of them. `arguments` passes further options
 to `swift test`.
+
+## Checking Swift formatting
+
+```yaml
+- uses: whereareiam/devops/primitive/setup/xcode@v3
+  with:
+    minimum-version: "16"
+
+- uses: whereareiam/devops/primitive/lint/swift/run@v3
+  with:
+    paths: |
+      App
+      Module
+```
+
+`paths` lists files, directories or globs, one per line; directories are checked recursively. The
+style comes from the `.swift-format` file nearest to each source, so the repository decides it, and
+`swift format --in-place --recursive .` applies it locally. The action fails on any finding, after
+annotating each one on its line. `swift format` ships with Xcode 16 and later.
 
 ## Regrouping a release draft
 
