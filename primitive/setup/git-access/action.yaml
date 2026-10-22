@@ -1,0 +1,47 @@
+name: Set up Git access
+description: Let every later Git call of the job read the listed GitHub repositories with a token, without writing it to any Git configuration file
+
+inputs:
+  token:
+    description: Token that can read the repositories, for example a fine-grained token with read-only contents access; pass it from a secret
+    required: true
+  repositories:
+    description: Newline-separated owner/name of the repositories to read, for example private Swift packages
+    required: true
+  server:
+    description: Address of the GitHub server
+    required: false
+    default: https://github.com
+
+runs:
+  using: composite
+  steps:
+    # GIT_CONFIG_COUNT and its pairs act like `git -c` for every Git process of the later steps, including the ones
+    # xcodebuild and SwiftPM start, and end with the job. A self-hosted runner's ~/.gitconfig never sees the token.
+    - name: Set up Git access
+      shell: bash
+      env:
+        TOKEN: ${{ inputs.token }}
+        REPOSITORIES: ${{ inputs.repositories }}
+        SERVER: ${{ inputs.server }}
+      run: |
+        set -euo pipefail
+        [[ -n "$TOKEN" ]] || { echo "::error::The token is empty; check that the secret exists and is passed to this job."; exit 1; }
+        header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
+        echo "::add-mask::$header"
+        count="${GIT_CONFIG_COUNT:-0}"
+        while IFS= read -r repository; do
+          repository="${repository// /}"
+          [[ -n "$repository" ]] || continue
+          [[ "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "::error::'$repository' is not owner/name."; exit 1; }
+          for url in "${SERVER%/}/$repository" "${SERVER%/}/$repository.git"; do
+            {
+              echo "GIT_CONFIG_KEY_$count=http.$url.extraheader"
+              echo "GIT_CONFIG_VALUE_$count=$header"
+            } >> "$GITHUB_ENV"
+            count=$((count + 1))
+          done
+          echo "Git reads ${SERVER%/}/$repository with the token for the rest of the job."
+        done <<< "$REPOSITORIES"
+        (( count > ${GIT_CONFIG_COUNT:-0} )) || { echo "::error::No repository listed."; exit 1; }
+        echo "GIT_CONFIG_COUNT=$count" >> "$GITHUB_ENV"
