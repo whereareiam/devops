@@ -12,6 +12,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | Build and push a Docker image | [Publishing images](#publishing-images) |
 | Show test results on a run | [Reporting test results](#reporting-test-results) |
 | Check a pull request's title and labels | [Validating pull requests](#validating-pull-requests) |
+| Let a job's Git read private repositories, such as Swift packages | [Setting up Git access](#setting-up-git-access) |
 | Pick the Xcode a macOS job builds with | [Setting up Xcode](#setting-up-xcode) |
 | Test Swift packages and report the results | [Testing Swift packages](#testing-swift-packages) |
 | Check that Swift sources follow the repository's formatting | [Checking Swift formatting](#checking-swift-formatting) |
@@ -36,6 +37,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | `primitive/report/junit/publish` | Summarizes the failed tests and uploads JUnit results and reports when a test failed. |
 | `primitive/setup/docker-images` | Loads Docker images from the Actions cache, and pulls and caches them only when the cache has none for these references. |
 | `primitive/setup/gradle` | Installs the JDK that runs Gradle, further toolchain JDKs, and Gradle with one cache policy. |
+| `primitive/setup/git-access` | Lets every later Git call of the job read the listed repositories with a token, without writing it to a Git configuration file. |
 | `primitive/setup/xcode` | Selects the newest installed Xcode at or above a minimum version through `DEVELOPER_DIR`. |
 | `primitive/test/swift/run` | Runs `swift test` for each Swift package and writes JUnit results. |
 | `primitive/lint/swift/run` | Runs `swift format lint` and annotates every finding. |
@@ -153,6 +155,23 @@ The title must read `Area: Description`, and the pull request must carry exactly
 `feature`, `change`, `bug` and `dependencies`, or `skip-changelog`. `title-pattern`,
 `category-labels` and `skip-label` change those rules. The action reads the pull request through
 the API and never checks out its code, so it is safe under `pull_request_target`.
+
+## Setting up Git access
+
+```yaml
+- uses: whereareiam/devops/primitive/setup/git-access@v3
+  with:
+    token: ${{ secrets.FABRICA_TOKEN }}
+    repositories: |
+      whereareiam/fabrica
+```
+
+Run it before the first step that fetches the repositories, such as `xcodebuild` or `swift test`
+resolving a private package. The token goes into `GIT_CONFIG_COUNT` and its key-value pairs as an
+authorization header for exactly the listed repositories (with and without `.git`), so every Git
+process of the later steps sends it, and nothing outlives the job. A self-hosted runner's
+`~/.gitconfig` stays untouched, and the header is masked in logs. A fine-grained token with
+read-only contents access to the listed repositories is enough. `server` changes the GitHub address.
 
 ## Setting up Xcode
 
