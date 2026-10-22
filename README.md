@@ -15,6 +15,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | Pick the Xcode a macOS job builds with | [Setting up Xcode](#setting-up-xcode) |
 | Test Swift packages and report the results | [Testing Swift packages](#testing-swift-packages) |
 | Check that Swift sources follow the repository's formatting | [Checking Swift formatting](#checking-swift-formatting) |
+| Archive an Apple app and send it to TestFlight | [Uploading to App Store Connect](#uploading-to-app-store-connect) |
 | Sort a release draft by title prefix and move developer changes apart | [Regrouping a release draft](#regrouping-a-release-draft) |
 | Turn release notes into another format, such as a BBCode post | [Formatting release notes](#formatting-release-notes) |
 | Move release actions from blockops `v4` | [Moving from blockops](#moving-from-blockops) |
@@ -29,6 +30,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | `primitive/auth/artifact-keeper/request-token` | Exchanges the job's OIDC token for a short-lived Artifact Keeper token. |
 | `primitive/metadata/image/resolve-repository` | Resolves the repository an image of the current GitHub repository lives in. |
 | `primitive/pull-request/validate-metadata` | Checks that a pull request's title and labels fit a changelog built from pull requests. |
+| `primitive/release/app-store/upload` | Archives an Xcode scheme for one platform and uploads it to App Store Connect, signed through an API key. |
 | `primitive/release/draft/regroup` | Regroups a draft release body by pull request title prefix, adds the release notes file, and updates the draft. |
 | `primitive/release/notes/format` | Converts release notes into another format, such as BBCode. |
 | `primitive/report/junit/publish` | Summarizes the failed tests and uploads JUnit results and reports when a test failed. |
@@ -206,6 +208,39 @@ to `swift test`.
 style comes from the `.swift-format` file nearest to each source, so the repository decides it, and
 `swift format --in-place --recursive .` applies it locally. The action fails on any finding, after
 annotating each one on its line. `swift format` ships with Xcode 16 and later.
+
+## Uploading to App Store Connect
+
+```yaml
+- uses: whereareiam/devops/primitive/setup/xcode@v3
+  with:
+    minimum-version: "27"
+
+- uses: whereareiam/devops/primitive/release/app-store/upload@v3
+  with:
+    project: App.xcodeproj
+    scheme: App
+    platform: iOS
+    version: 1.2.0
+    build-number: ${{ github.run_number }}
+    api-key-id: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
+    api-issuer-id: ${{ vars.APP_STORE_CONNECT_ISSUER_ID }}
+    api-key: ${{ secrets.APP_STORE_CONNECT_KEY }}
+```
+
+The action archives `scheme` in Release for `platform` (`iOS`, `macOS`, `tvOS`, `visionOS`, `watchOS`),
+with `version` and `build-number` replacing the project's own, and uploads the archive to App Store
+Connect, where it appears in TestFlight once processed. Run it once per platform, for example in a
+matrix; iPadOS builds come with `iOS`. The build number must grow with every upload of a version,
+for each platform on its own.
+
+Signing goes through an App Store Connect API key with the Admin role (Users and Access ›
+Integrations): with it, Xcode creates the provisioning profiles and signs with a cloud-managed
+distribution certificate, so the runner needs no distribution certificate. Keep the key ID and issuer
+ID as variables and the `.p8` contents as a secret; the key file exists only while the step runs.
+The archive itself is signed for development first, so a self-hosted runner needs the team's
+development certificate in the keychain of the user the runner runs as. `team-id` overrides the
+project's team.
 
 ## Regrouping a release draft
 
