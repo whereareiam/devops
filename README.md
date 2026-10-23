@@ -17,6 +17,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | Test Swift packages and report the results | [Testing Swift packages](#testing-swift-packages) |
 | Check that Swift sources follow the repository's formatting | [Checking Swift formatting](#checking-swift-formatting) |
 | Archive an Apple app and send it to TestFlight | [Uploading to App Store Connect](#uploading-to-app-store-connect) |
+| Hand an uploaded build to a TestFlight group | [Distributing to TestFlight](#distributing-to-testflight) |
 | Sort a release draft by title prefix and move developer changes apart | [Regrouping a release draft](#regrouping-a-release-draft) |
 | Turn release notes into another format, such as a BBCode post | [Formatting release notes](#formatting-release-notes) |
 | Move release actions from blockops `v4` | [Moving from blockops](#moving-from-blockops) |
@@ -31,6 +32,7 @@ major tag, for example `whereareiam/devops/primitive/setup/gradle@v3`.
 | `primitive/auth/artifact-keeper/request-token` | Exchanges the job's OIDC token for a short-lived Artifact Keeper token. |
 | `primitive/metadata/image/resolve-repository` | Resolves the repository an image of the current GitHub repository lives in. |
 | `primitive/pull-request/validate-metadata` | Checks that a pull request's title and labels fit a changelog built from pull requests. |
+| `primitive/release/app-store/distribute` | Waits until App Store Connect processed an uploaded build and adds it to a TestFlight group, submitting it for beta review when the group is external. |
 | `primitive/release/app-store/upload` | Archives an Xcode scheme for one platform and uploads it to App Store Connect, signed through an API key. |
 | `primitive/release/draft/regroup` | Regroups a draft release body by pull request title prefix, adds the release notes file, and updates the draft. |
 | `primitive/release/notes/format` | Converts release notes into another format, such as BBCode. |
@@ -260,6 +262,30 @@ ID as variables and the `.p8` contents as a secret; the key file exists only whi
 The archive itself is signed for development first, so a self-hosted runner needs the team's
 development certificate in the keychain of the user the runner runs as. `team-id` overrides the
 project's team.
+
+## Distributing to TestFlight
+
+```yaml
+- uses: whereareiam/devops/primitive/release/app-store/distribute@v3
+  with:
+    bundle-id: com.example.app
+    platform: iOS
+    version: 1.2.0
+    build-number: ${{ steps.build.outputs.number }}
+    group: Friends
+    notes: Try the new library.
+    api-key-id: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
+    api-issuer-id: ${{ vars.APP_STORE_CONNECT_ISSUER_ID }}
+    api-key: ${{ secrets.APP_STORE_CONNECT_KEY }}
+```
+
+Run it after the upload, with the same platform, version and build number. It waits up to
+`timeout-seconds` (45 minutes by default) for App Store Connect to process the build, sets `notes` as
+What to Test, and adds the build to the TestFlight group named `group`; a missing group fails with the
+names the app has. An internal group's testers can install the build at once. An external group's
+build is also submitted for beta review, which Apple must pass before those testers see it; a build
+submitted before is left as it is. It uses the same API key as the upload, and needs only Python's
+standard library and `openssl`, which every macOS runner has.
 
 ## Regrouping a release draft
 
