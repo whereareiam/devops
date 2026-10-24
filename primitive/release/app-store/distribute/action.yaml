@@ -1,0 +1,70 @@
+name: Distribute to TestFlight
+description: Waits until App Store Connect has processed an uploaded build, then adds it to a TestFlight group; an external group's build is also submitted for beta review.
+
+inputs:
+  bundle-id:
+    description: Bundle identifier of the app, for example me.whereareiam.chronica
+    required: true
+  platform:
+    description: Platform the build is for, as the upload action names it, for example iOS, macOS or tvOS
+    required: true
+  version:
+    description: Version people see, the one the build was uploaded with
+    required: true
+  build-number:
+    description: Build number the build was uploaded with
+    required: true
+  group:
+    description: Name of the TestFlight group to hand the build to, as App Store Connect shows it
+    required: true
+  notes:
+    description: What testers see under What to Test; empty leaves it as it is
+    required: false
+    default: ""
+  timeout-seconds:
+    description: How long to wait for App Store Connect to process the build
+    required: false
+    default: "2700"
+  api-key-id:
+    description: Key ID of the App Store Connect API key
+    required: true
+  api-issuer-id:
+    description: Issuer ID of the App Store Connect API key
+    required: true
+  api-key:
+    description: Contents of the App Store Connect API key's .p8 file; pass it from a secret
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Standard library Python and the system's openssl only, so the runner that uploaded needs nothing more.
+    - name: Distribute
+      shell: bash
+      env:
+        BUNDLE_ID: ${{ inputs.bundle-id }}
+        PLATFORM: ${{ inputs.platform }}
+        VERSION: ${{ inputs.version }}
+        BUILD_NUMBER: ${{ inputs.build-number }}
+        GROUP: ${{ inputs.group }}
+        NOTES: ${{ inputs.notes }}
+        TIMEOUT: ${{ inputs.timeout-seconds }}
+        API_KEY_ID: ${{ inputs.api-key-id }}
+        API_ISSUER_ID: ${{ inputs.api-issuer-id }}
+        API_KEY: ${{ inputs.api-key }}
+      run: |
+        set -euo pipefail
+        key="$RUNNER_TEMP/testflight-$API_KEY_ID-$PLATFORM.p8"
+        trap 'rm -f "$key"' EXIT
+        (umask 077 && printf '%s\n' "$API_KEY" > "$key")
+        PYTHONPATH="$GITHUB_ACTION_PATH/../../../../src" python3 -m release.app_store.testflight \
+          --bundle-id "$BUNDLE_ID" \
+          --platform "$PLATFORM" \
+          --version "$VERSION" \
+          --build-number "$BUILD_NUMBER" \
+          --group "$GROUP" \
+          --notes "$NOTES" \
+          --timeout "$TIMEOUT" \
+          --key-id "$API_KEY_ID" \
+          --issuer-id "$API_ISSUER_ID" \
+          --key-path "$key" | tee -a "$GITHUB_STEP_SUMMARY"
